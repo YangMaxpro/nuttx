@@ -1,0 +1,190 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+if ARCH_CHIP_CUSTOM
+
+comment "BK7258 Configuration Options"
+
+choice
+	prompt "BK7258 Chip Selection"
+	default ARCH_CHIP_BK7258
+
+config ARCH_CHIP_BK7258
+	bool "BK7258"
+	select ARCH_CORTEXM33
+	select ARCH_HAVE_FPU
+	select ARCH_HAVE_MPU
+	select ARM_HAVE_MPU_UNIFIED
+
+endchoice
+
+config BK7258_NR_IRQS
+	int "Interrupt Number"
+	default 80
+
+menuconfig BK7258_UART
+	bool "BK7258 UART chip support"
+	select ARCH_HAVE_SERIAL_TERMIOS
+	default y
+
+if BK7258_UART
+
+config BK7258_UART0
+	bool "BK7258 UART0"
+	default y
+
+if BK7258_UART0
+
+config BK7258_UART0_BAUD
+	int "BK7258 UART0 BAUD"
+	default 115200
+
+config BK7258_UART0_PARITY
+	int "BK7258 UART0 parity"
+	default 0
+	range 0 2
+	---help---
+		BK7258 UART0 parity.  0=None, 1=Odd, 2=Even.  Default: None
+
+config BK7258_UART0_BITS
+	int "BK7258 UART0 number of bits"
+	default 8
+	---help---
+		BK7258 UART0 number of bits.  Default: 8
+
+config BK7258_UART0_2STOP
+	int "BK7258 UART0 two stop bits"
+	default 0
+	---help---
+		0=1 stop bit, 1=Two stop bits.  Default: 1 stop bit
+
+config BK7258_UART0_RXBUFSIZE
+	int "BK7258 UART0 Rx buffer size"
+	default 256
+	---help---
+		BK7258 UART0 Rx buffer size.  Default: 256
+
+config BK7258_UART0_TXBUFSIZE
+	int "BK7258 UART0 Tx buffer size"
+	default 256
+	---help---
+		BK7258 UART0 Tx buffer size.  Default: 256
+
+endif # BK7258_UART0
+
+config BK7258_UART1
+	bool "BK7258 UART1"
+	default n
+
+if BK7258_UART1
+
+config BK7258_UART1_BAUD
+	int "BK7258 UART1 BAUD"
+	default 115200
+
+config BK7258_UART1_PARITY
+	int "BK7258 UART1 parity"
+	default 0
+	range 0 2
+	---help---
+		BK7258 UART1 parity.  0=None, 1=Odd, 2=Even.  Default: None
+
+config BK7258_UART1_BITS
+	int "BK7258 UART1 number of bits"
+	default 8
+	---help---
+		BK7258 UART1 number of bits.  Default: 8
+
+config BK7258_UART1_2STOP
+	int "BK7258 UART1 two stop bits"
+	default 0
+	---help---
+		0=1 stop bit, 1=Two stop bits.  Default: 1 stop bit
+
+config BK7258_UART1_RXBUFSIZE
+	int "BK7258 UART1 Rx buffer size"
+	default 256
+	---help---
+		BK7258 UART1 Rx buffer size.  Default: 256
+
+config BK7258_UART1_TXBUFSIZE
+	int "BK7258 UART1 Tx buffer size"
+	default 256
+	---help---
+		BK7258 UART1 Tx buffer size.  Default: 256
+
+endif # BK7258_UART1
+
+config BK7258_UART2
+	bool "BK7258 UART2"
+	default n
+
+if BK7258_UART2
+
+config BK7258_UART2_BAUD
+	int "BK7258 UART2 BAUD"
+	default 115200
+
+config BK7258_UART2_PARITY
+	int "BK7258 UART2 parity"
+	default 0
+	range 0 2
+	---help---
+		BK7258 UART2 parity.  0=None, 1=Odd, 2=Even.  Default: None
+
+config BK7258_UART2_BITS
+	int "BK7258 UART2 number of bits"
+	default 8
+	---help---
+		BK7258 UART2 number of bits.  Default: 8
+
+config BK7258_UART2_2STOP
+	int "BK7258 UART2 two stop bits"
+	default 0
+	---help---
+		0=1 stop bit, 1=Two stop bits.  Default: 1 stop bit
+
+config BK7258_UART2_RXBUFSIZE
+	int "BK7258 UART2 Rx buffer size"
+	default 256
+	---help---
+		BK7258 UART2 Rx buffer size.  Default: 256
+
+config BK7258_UART2_TXBUFSIZE
+	int "BK7258 UART2 Tx buffer size"
+	default 256
+	---help---
+		BK7258 UART2 Tx buffer size.  Default: 256
+
+endif # BK7258_UART2
+
+choice
+	prompt "BK7258 Serial Console"
+	default BK7258_UART0_SERIAL_CONSOLE
+	depends on DEV_CONSOLE
+
+config BK7258_UART0_SERIAL_CONSOLE
+	bool "BK7258 UART0 serial console"
+	depends on BK7258_UART0
+	select SERIAL_CONSOLE
+
+config BK7258_UART1_SERIAL_CONSOLE
+	bool "BK7258 UART1 serial console"
+	depends on BK7258_UART1
+	select SERIAL_CONSOLE
+
+config BK7258_UART2_SERIAL_CONSOLE
+	bool "BK7258 UART2 serial console"
+	depends on BK7258_UART2
+	select SERIAL_CONSOLE
+
+config BK7258_NO_SERIAL_CONSOLE
+	bool "No BK7258 serial console"
+
+endchoice # BK7258 Serial Console
+
+endif # BK7258_UART
+
+endif # ARCH_CHIP_CUSTOM

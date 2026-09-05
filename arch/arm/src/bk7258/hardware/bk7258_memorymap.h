@@ -63,6 +63,9 @@
 #define BK7258_GPIO_SYS_FUNC_MODE    (BK7258_SYS_REG_BASE + 0x30 * 4)
 
 /* AON GPIO per-pin cfg bit fields (see Armino gpio_struct.h) */
+#define BK7258_GPIO_IO_MODE_SHIFT    2
+#define BK7258_GPIO_IO_MODE_MASK     (3u << BK7258_GPIO_IO_MODE_SHIFT)
+#define BK7258_GPIO_IO_DISABLE       (2u << BK7258_GPIO_IO_MODE_SHIFT)
 #define BK7258_GPIO_INPUT_EN         (1u << 2)
 #define BK7258_GPIO_OUTPUT_EN        (1u << 3)
 #define BK7258_GPIO_PULL_MODE        (1u << 4) /* 1 = pull-up */

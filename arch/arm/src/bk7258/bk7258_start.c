@@ -113,13 +113,13 @@ static void bk7258_uart0_pinconfig(void)
    * for these UART pins.  Disable the ordinary GPIO input/output drivers. */
 
   reg = bk7258_r32(BK7258_AON_GPIO_REG_BASE + 10 * 4);
-  reg &= ~(BK7258_GPIO_INPUT_EN | BK7258_GPIO_OUTPUT_EN);
+  reg = (reg & ~BK7258_GPIO_IO_MODE_MASK) | BK7258_GPIO_IO_DISABLE;
   reg |= BK7258_GPIO_PULL_MODE | BK7258_GPIO_PULL_MODE_EN |
          BK7258_GPIO_2_FUNC_EN;
   bk7258_w32(BK7258_AON_GPIO_REG_BASE + 10 * 4, reg);
 
   reg = bk7258_r32(BK7258_AON_GPIO_REG_BASE + 11 * 4);
-  reg &= ~(BK7258_GPIO_INPUT_EN | BK7258_GPIO_OUTPUT_EN);
+  reg = (reg & ~BK7258_GPIO_IO_MODE_MASK) | BK7258_GPIO_IO_DISABLE;
   reg |= BK7258_GPIO_PULL_MODE | BK7258_GPIO_PULL_MODE_EN |
          BK7258_GPIO_2_FUNC_EN;
   bk7258_w32(BK7258_AON_GPIO_REG_BASE + 11 * 4, reg);

@@ -230,9 +230,11 @@ static void bk7258_uart_configure(struct bk7258_uart_s *priv)
 {
   uint32_t regval;
 
-  /* Soft reset the UART block */
+  /* Soft reset the UART block while preserving the clock-gate bypass. */
 
-  BK7258_UART_REG(priv, BK7258_UART_GLOBAL_CTRL_OFFSET) = 1;
+  regval = BK7258_UART_REG(priv, BK7258_UART_GLOBAL_CTRL_OFFSET);
+  BK7258_UART_REG(priv, BK7258_UART_GLOBAL_CTRL_OFFSET) =
+    regval | BK7258_UART_CLK_GATE_BYPASS;
 
   /* Build the CONFIG register: enable TX/RX, data bits, parity, stop
    * bits and the baud rate divisor.

@@ -44,7 +44,7 @@
  *   This heap function is called before the RTOS is started to provide the
  *   initial heap.  The heap starts at the end of the idle task stack
  *   (g_idle_topstack) and extends to the end of the BK7258 AP SRAM
- *   (336K @ 0x28000000).
+ *   (336K @ 0x28010000; 0x28000000-0x2800ffff is spinlock storage).
  *
  ****************************************************************************/
 

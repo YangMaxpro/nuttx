@@ -26,6 +26,8 @@
 #include <nuttx/init.h>
 
 #include "arm_internal.h"
+#include "hardware/bk7258_memorymap.h"
+#include "hardware/bk7258_uart.h"
 
 /****************************************************************************
  * Public Data
@@ -60,6 +62,70 @@ const uintptr_t g_idle_topstack = HEAP_BASE;
  *
  ****************************************************************************/
 
+
+/****************************************************************************
+ * Name: bk7258_uart0_pinconfig
+ *
+ * Description:
+ *   Configure the BK7258 UART0 clock and GPIO matrix before early serial
+ *   initialization.  The R1 debug header uses GPIO10 for UART0 RX and GPIO11
+ *   for UART0 TX.  This function uses only direct register accesses and
+ *   runs immediately before early serial initialization.
+ *
+ ****************************************************************************/
+
+static inline void bk7258_w32(uintptr_t addr, uint32_t val)
+{
+  *(volatile uint32_t *)addr = val;
+}
+
+static inline uint32_t bk7258_r32(uintptr_t addr)
+{
+  return *(volatile uint32_t *)addr;
+}
+
+static void bk7258_uart0_pinconfig(void)
+{
+  uint32_t reg;
+
+  /* Enable the UART0 device clock and select the 26 MHz crystal at /1. */
+
+  reg = bk7258_r32(BK7258_SYS_CPU_DEVICE_CLK_EN);
+  bk7258_w32(BK7258_SYS_CPU_DEVICE_CLK_EN, reg | BK7258_UART0_CKEN);
+
+  reg = bk7258_r32(BK7258_SYS_CPU_CLK_DIV_MODE1);
+  bk7258_w32(BK7258_SYS_CPU_CLK_DIV_MODE1,
+             reg & ~BK7258_UART0_CLKSEL_MASK);
+
+  /* Keep the UART0 functional clock ungated across the UART soft reset. */
+
+  reg = bk7258_r32(BK7258_UART0_BASE + BK7258_UART_GLOBAL_CTRL_OFFSET);
+  bk7258_w32(BK7258_UART0_BASE + BK7258_UART_GLOBAL_CTRL_OFFSET,
+             reg | BK7258_UART_CLK_GATE_BYPASS);
+
+  /* GPIO10/GPIO11 are gpio_sys_num[1] fields 2 and 3.  UART0 is mode 0. */
+
+  reg = bk7258_r32(BK7258_GPIO_SYS_FUNC_MODE + 4);
+  reg &= ~((0xfu << 8) | (0xfu << 12));
+  bk7258_w32(BK7258_GPIO_SYS_FUNC_MODE + 4, reg);
+
+  /* gpio_hal_func_map() uses second-function mode, GPIO_IO_DISABLE and pull-up
+   * for these UART pins.  Disable the ordinary GPIO input/output drivers. */
+
+  reg = bk7258_r32(BK7258_AON_GPIO_REG_BASE + 10 * 4);
+  reg &= ~(BK7258_GPIO_INPUT_EN | BK7258_GPIO_OUTPUT_EN);
+  reg |= BK7258_GPIO_PULL_MODE | BK7258_GPIO_PULL_MODE_EN |
+         BK7258_GPIO_2_FUNC_EN;
+  bk7258_w32(BK7258_AON_GPIO_REG_BASE + 10 * 4, reg);
+
+  reg = bk7258_r32(BK7258_AON_GPIO_REG_BASE + 11 * 4);
+  reg &= ~(BK7258_GPIO_INPUT_EN | BK7258_GPIO_OUTPUT_EN);
+  reg |= BK7258_GPIO_PULL_MODE | BK7258_GPIO_PULL_MODE_EN |
+         BK7258_GPIO_2_FUNC_EN;
+  bk7258_w32(BK7258_AON_GPIO_REG_BASE + 11 * 4, reg);
+}
+
+
 void __start(void)
 {
   const uint32_t *src;
@@ -90,6 +156,10 @@ void __start(void)
     }
 
   /* Perform early serial initialization */
+
+  /* Route and clock the debug UART before touching the console. */
+
+  bk7258_uart0_pinconfig();
 
 #ifdef USE_EARLYSERIALINIT
   arm_earlyserialinit();

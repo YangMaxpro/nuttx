@@ -1,126 +1,74 @@
 /****************************************************************************
- * arch/arm/src/bk7258/include/irq.h
+ * vendor/beken/chips/bk7258/include/irq.h
  *
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.  The
- * ASF licenses this file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
- * License for the specific language governing permissions and limitations
- * under the License.
- *
+ * SPDX-License-Identifier: Apache-2.0
  ****************************************************************************/
 
-/* This file should never be included directly but, rather, only indirectly
- * through nuttx/irq.h
- */
-
-#ifndef __ARCH_ARM_SRC_BK7258_INCLUDE_IRQ_H
-#define __ARCH_ARM_SRC_BK7258_INCLUDE_IRQ_H
-
-/****************************************************************************
- * Included Files
- ****************************************************************************/
+#ifndef __VENDOR_BEKEN_CHIPS_BK7258_INCLUDE_IRQ_H
+#define __VENDOR_BEKEN_CHIPS_BK7258_INCLUDE_IRQ_H
 
 #include <nuttx/config.h>
+#include <arch/chip/irq.h>
 
-/****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
+#define BK7258_IRQ_RESERVED        0
+#define BK7258_IRQ_NMI             2
+#define BK7258_IRQ_HARDFAULT       3
+#define BK7258_IRQ_MEMFAULT        4
+#define BK7258_IRQ_BUSFAULT        5
+#define BK7258_IRQ_USAGEFAULT      6
+#define BK7258_IRQ_SECUREFAULT     7
+#define BK7258_IRQ_SVCALL          11
+#define BK7258_IRQ_DBGMONITOR      12
+#define BK7258_IRQ_PENDSV          14
+#define BK7258_IRQ_SYSTICK         15
+#define BK7258_IRQ_FIRST           16
 
-/* Exception/interrupt vector numbers */
+#define BK7258_EXTIRQ_TIMER0      3
+#define BK7258_EXTIRQ_UART0       4
+#define BK7258_EXTIRQ_DMA         11
+#define BK7258_EXTIRQ_TIMER1      13
+#define BK7258_EXTIRQ_I2C1        14
+#define BK7258_EXTIRQ_UART1       15
+#define BK7258_EXTIRQ_UART2       16
+#define BK7258_EXTIRQ_SDIO        10
 
-/* Vector  0: Reset stack pointer value */
-
-/* Vector  1: Reset */
-
-#define NVIC_IRQ_NMI               (2)    /* Vector  2: Non-Maskable Interrupt (NMI) */
-
-#define NVIC_IRQ_HARDFAULT         (3)    /* Vector  3: Hard fault */
-
-#define NVIC_IRQ_MEMFAULT          (4)    /* Vector  4: Memory management (MPU) */
-
-#define NVIC_IRQ_BUSFAULT          (5)    /* Vector  5: Bus fault */
-
-#define NVIC_IRQ_USAGEFAULT        (6)    /* Vector  6: Usage fault */
-
-/* Vectors 7-10: Reserved */
-
-#define NVIC_IRQ_SVCALL            (11)   /* Vector 11: SVC call */
-
-#define NVIC_IRQ_DBGMONITOR        (12)   /* Vector 12: Debug Monitor */
-
-/* Vector 13: Reserved */
-
-#define NVIC_IRQ_PENDSV            (14)   /* Vector 14: Pendable system service request */
-
-#define NVIC_IRQ_SYSTICK           (15)   /* Vector 15: System tick */
-
-/* External interrupts (vectors >= 16). These definitions are chip-specific.
- * The BK7258 interrupt numbers below follow the CMSIS IRQn_Type encoding
- * used by the Beken Armino SDK (see bk7236.h): the NuttX IRQ number equals
- * the vector number, i.e. 16 + CMSIS IRQn.
+/* Analog audio (AUD) FIFO interrupt.  bk_avdk_smp release/v3.1.1
+ * ap/middleware/soc/bk7258_ap/soc/icu_map.h:53 maps INT_SRC_AUDIO to
+ * external interrupt line 23 in GROUP0.
  */
 
-#define NVIC_IRQ_FIRST             (16)   /* Vector number of the first interrupt */
+#define BK7258_EXTIRQ_AUDIO       23
 
-/* BK7258 peripheral interrupts (16 + IRQn) */
-
-#define NVIC_IRQ_UART0             (20)   /* IRQn 4:  UART0 */
-#define NVIC_IRQ_UART1             (31)   /* IRQn 15: UART1 */
-#define NVIC_IRQ_UART2             (32)   /* IRQn 16: UART2 */
-
-/* IRQ numbers.  The IRQ number corresponds to the vector number and hence
- * maps directly to bits in the NVIC.  NR_IRQS covers all 64 peripheral
- * interrupt lines of the BK7258 (IRQn 0..63, see InterruptMAX_IRQn in the
- * CMSIS device header).
+/* Hardware JPEG encoder interrupt.  bk_avdk_smp release/v3.1.1
+ * ap/middleware/soc/bk7258_ap/soc/icu_map.h:55 maps INT_SRC_JPEG_ENC to
+ * external interrupt line 25 in GROUP0 (line 26 is INT_SRC_JPEG_DEC --
+ * the decoder, a different module).
  */
 
-#define NR_IRQS                    CONFIG_BK7258_NR_IRQS
+#define BK7258_EXTIRQ_JPEG_ENC    25
+#define BK7258_EXTIRQ_YUVB        58
+#define BK7258_EXTIRQ_MAILBOX     63
+#define BK7258_EXTIRQ_COUNT       64
 
-/* NVIC priority levels */
+#define BK7258_IRQ_TIMER0          (BK7258_IRQ_FIRST + BK7258_EXTIRQ_TIMER0)
+#define BK7258_IRQ_UART0           (BK7258_IRQ_FIRST + BK7258_EXTIRQ_UART0)
+#define BK7258_IRQ_DMA             (BK7258_IRQ_FIRST + BK7258_EXTIRQ_DMA)
+#define BK7258_IRQ_TIMER1          (BK7258_IRQ_FIRST + BK7258_EXTIRQ_TIMER1)
+#define BK7258_IRQ_I2C1            (BK7258_IRQ_FIRST + BK7258_EXTIRQ_I2C1)
+#define BK7258_IRQ_UART1           (BK7258_IRQ_FIRST + BK7258_EXTIRQ_UART1)
+#define BK7258_IRQ_UART2           (BK7258_IRQ_FIRST + BK7258_EXTIRQ_UART2)
+#define BK7258_IRQ_SDIO            (BK7258_IRQ_FIRST + BK7258_EXTIRQ_SDIO)
+#define BK7258_IRQ_AUDIO           (BK7258_IRQ_FIRST + BK7258_EXTIRQ_AUDIO)
+#define BK7258_IRQ_JPEG_ENC        (BK7258_IRQ_FIRST + \
+                                    BK7258_EXTIRQ_JPEG_ENC)
+#define BK7258_IRQ_YUVB            (BK7258_IRQ_FIRST + BK7258_EXTIRQ_YUVB)
+#define BK7258_IRQ_MAILBOX         (BK7258_IRQ_FIRST + BK7258_EXTIRQ_MAILBOX)
 
-#define NVIC_SYSH_PRIORITY_MIN     0xff /* All bits set in minimum priority */
+#define NR_IRQS                    (BK7258_IRQ_FIRST + BK7258_EXTIRQ_COUNT)
 
-#define NVIC_SYSH_PRIORITY_DEFAULT 0x40 /* Midpoint is the default */
+#define NVIC_SYSH_PRIORITY_MIN     0xf0
+#define NVIC_SYSH_PRIORITY_DEFAULT 0x80
+#define NVIC_SYSH_PRIORITY_MAX     0x00
+#define NVIC_SYSH_PRIORITY_STEP    0x10
 
-#define NVIC_SYSH_PRIORITY_MAX     0x00 /* Zero is maximum priority */
-
-#define NVIC_SYSH_PRIORITY_STEP    0x40 /* Three bits priority used, bits[7-6] as group */
-
-#define NVIC_SYSH_PRIORITY_SUBSTEP 0x20 /* Three bits priority used, bit[5] as sub */
-
-/****************************************************************************
- * Public Types
- ****************************************************************************/
-
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-#ifndef __ASSEMBLY__
-
-#ifdef __cplusplus
-#define EXTERN extern "C"
-extern "C"
-{
-#else
-#define EXTERN extern
 #endif
-
-#undef EXTERN
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* __ASSEMBLY__ */
-
-#endif /* __ARCH_ARM_SRC_BK7258_INCLUDE_IRQ_H */

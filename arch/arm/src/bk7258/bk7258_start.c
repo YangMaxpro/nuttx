@@ -1,175 +1,249 @@
 /****************************************************************************
- * arch/arm/src/bk7258/bk7258_start.c
+ * vendor/beken/chips/bk7258/bk7258_start.c
  *
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.  The
- * ASF licenses this file to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the
- * License.  You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
- * License for the specific language governing permissions and limitations
- * under the License.
- *
- ****************************************************************************/
-
-/****************************************************************************
- * Included Files
+ * SPDX-License-Identifier: Apache-2.0
  ****************************************************************************/
 
 #include <nuttx/config.h>
+
+#include <stdint.h>
+#include <stdbool.h>
+
 #include <nuttx/init.h>
+#include <nuttx/syslog/syslog.h>
 
 #include "arm_internal.h"
+#include <nuttx/cache.h>
+
+#include "mpu.h"
+#include "nvic.h"
+
 #include "hardware/bk7258_memorymap.h"
-#include "hardware/bk7258_uart.h"
+#include "hardware/bk7258_mbox.h"
+#include "hardware/bk7258_psram.h"
 
-/****************************************************************************
- * Public Data
- ****************************************************************************/
-
-/* g_idle_topstack: _sbss is the start of the BSS region as defined by the
- * linker script.  _ebss lies at the end of the BSS region.  The idle task
- * stack starts at the end of BSS and is of size CONFIG_IDLETHREAD_STACKSIZE.
- * The IDLE thread is the thread that the system boots on and, eventually,
- * becomes the IDLE, do nothing task that runs only when there is nothing
- * else to run.  The heap continues from there until the end of memory.
- * g_idle_topstack is a read-only variable that provides this computed
- * address.
- */
-
-#define HEAP_BASE ((uintptr_t)_ebss + CONFIG_IDLETHREAD_STACKSIZE)
-
-const uintptr_t g_idle_topstack = HEAP_BASE;
-
-/****************************************************************************
- * Public Functions
- ****************************************************************************/
-
-/****************************************************************************
- * Name: __start
- *
- * Description:
- *   This is the reset entry point, jumped to by the Beken Armino
- *   bootloader (or the vector table).  It initializes BSS, copies .data,
- *   enables the FPU if configured, initializes the early serial console
- *   and finally starts NuttX.
- *
- ****************************************************************************/
-
-
-/****************************************************************************
- * Name: bk7258_uart0_pinconfig
- *
- * Description:
- *   Configure the BK7258 UART0 clock and GPIO matrix before early serial
- *   initialization.  The R1 debug header uses GPIO10 for UART0 RX and GPIO11
- *   for UART0 TX.  This function uses only direct register accesses and
- *   runs immediately before early serial initialization.
- *
- ****************************************************************************/
-
-static inline void bk7258_w32(uintptr_t addr, uint32_t val)
-{
-  *(volatile uint32_t *)addr = val;
-}
-
-static inline uint32_t bk7258_r32(uintptr_t addr)
-{
-  return *(volatile uint32_t *)addr;
-}
-
-static void bk7258_uart0_pinconfig(void)
-{
-  uint32_t reg;
-
-  /* Enable the UART0 device clock and select the 26 MHz crystal at /1. */
-
-  reg = bk7258_r32(BK7258_SYS_CPU_DEVICE_CLK_EN);
-  bk7258_w32(BK7258_SYS_CPU_DEVICE_CLK_EN, reg | BK7258_UART0_CKEN);
-
-  reg = bk7258_r32(BK7258_SYS_CPU_CLK_DIV_MODE1);
-  bk7258_w32(BK7258_SYS_CPU_CLK_DIV_MODE1,
-             reg & ~BK7258_UART0_CLKSEL_MASK);
-
-  /* Keep the UART0 functional clock ungated across the UART soft reset. */
-
-  reg = bk7258_r32(BK7258_UART0_BASE + BK7258_UART_GLOBAL_CTRL_OFFSET);
-  bk7258_w32(BK7258_UART0_BASE + BK7258_UART_GLOBAL_CTRL_OFFSET,
-             reg | BK7258_UART_CLK_GATE_BYPASS);
-
-  /* GPIO10/GPIO11 are gpio_sys_num[1] fields 2 and 3.  UART0 is mode 0. */
-
-  reg = bk7258_r32(BK7258_GPIO_SYS_FUNC_MODE + 4);
-  reg &= ~((0xfu << 8) | (0xfu << 12));
-  bk7258_w32(BK7258_GPIO_SYS_FUNC_MODE + 4, reg);
-
-  /* gpio_hal_func_map() uses second-function mode, GPIO_IO_DISABLE and pull-up
-   * for these UART pins.  Disable the ordinary GPIO input/output drivers. */
-
-  reg = bk7258_r32(BK7258_AON_GPIO_REG_BASE + 10 * 4);
-  reg = (reg & ~BK7258_GPIO_IO_MODE_MASK) | BK7258_GPIO_IO_DISABLE;
-  reg |= BK7258_GPIO_PULL_MODE | BK7258_GPIO_PULL_MODE_EN |
-         BK7258_GPIO_2_FUNC_EN;
-  bk7258_w32(BK7258_AON_GPIO_REG_BASE + 10 * 4, reg);
-
-  reg = bk7258_r32(BK7258_AON_GPIO_REG_BASE + 11 * 4);
-  reg = (reg & ~BK7258_GPIO_IO_MODE_MASK) | BK7258_GPIO_IO_DISABLE;
-  reg |= BK7258_GPIO_PULL_MODE | BK7258_GPIO_PULL_MODE_EN |
-         BK7258_GPIO_2_FUNC_EN;
-  bk7258_w32(BK7258_AON_GPIO_REG_BASE + 11 * 4, reg);
-}
-
-
-void __start(void)
-{
-  const uint32_t *src;
-  uint32_t *dest;
-
-#ifdef CONFIG_ARCH_FPU
-  /* Enable the Cortex-M33 FPU (CPACR) */
-
-  arm_fpuconfig();
+#if defined(CONFIG_BK7258_PSRAM) && \
+    CONFIG_BK7258_PSRAM_SIZE != BK7258_PSRAM_SIZE
+#  error "BK7258 OpenVela and app_ab PSRAM capacities differ"
 #endif
 
-  /* Set BSS to zero */
+int bk7258_syslog_initialize(void);
 
-  for (dest = (uint32_t *)_sbss; dest < (uint32_t *)_ebss; )
-    {
-      *dest++ = 0;
-    }
+extern const uint8_t _eronly[];
+extern uint8_t _sdata[];
+extern uint8_t _edata[];
+extern uint8_t _sbss[];
+extern uint8_t _ebss[];
+extern uint8_t __ram_vectors_load[];
+extern uint8_t __ram_vectors_start[];
+extern uint8_t __ram_vectors_end[];
+extern uint8_t __idle_stack_base[];
+extern uint8_t __idle_stack_top[];
 
-  /* Copy the program/data from its load address (flash) to its runtime
-   * address (SRAM).
+const uintptr_t g_idle_topstack = (uintptr_t)__idle_stack_top;
+
+static const struct mpu_region_s g_bk7258_mpu_regions[] =
+{
+  {
+    BK7258_AP_FLASH_BASE,
+    BK7258_AP_FLASH_SIZE,
+    MPU_RBAR_AP_RORO | MPU_RBAR_SH_NO,
+    MPU_RLAR_WRITE_THROUGH
+  },
+  {
+    BK7258_AP_RAM_BASE,
+    BK7258_AP_RAM_SIZE,
+    MPU_RBAR_XN | MPU_RBAR_AP_RWRW | MPU_RBAR_SH_INNER,
+    MPU_RLAR_NONCACHEABLE
+  },
+  {
+    BK7258_CP_RAM_START,
+    BK7258_CP_RAM_END - BK7258_CP_RAM_START,
+    /* Controller-interface command/event pools and direct-push pbufs carry
+     * ownership words which the AP must return to the CP.
+     */
+
+    MPU_RBAR_XN | MPU_RBAR_AP_RWRW | MPU_RBAR_SH_INNER,
+    MPU_RLAR_NONCACHEABLE
+  },
+  {
+    /* One region for the whole run of SWAP this core writes and the CP reads:
+     * the IPC TX frame, the flash service descriptor and the flash payload
+     * staging buffer.  Covered as one rather than three because the part's
+     * MPU region count is checked against this table at boot and a table that
+     * does not fit leaves the AP spinning in wfi with no output.
+     *
+     * It has to be covered at all: mpu_initialize() below is called with
+     * privdefena, so an unmapped address here would still work -- as
+     * cacheable Normal memory, per the ARMv8-M default map -- and the CP
+     * would then read whatever the AP's cache had not written back yet.  Only
+     * the I-Cache is on today, which is the only reason the gap that used to
+     * sit over the flash descriptor never showed up as corruption.
+     */
+
+    BK7258_MB_SHARED_RW_START,
+    BK7258_MB_SHARED_RW_SIZE,
+    MPU_RBAR_XN | MPU_RBAR_AP_RWRW | MPU_RBAR_SH_INNER,
+    MPU_RLAR_NONCACHEABLE
+  },
+  {
+    BK7258_MB_UART_RX_ADDRESS,
+    BK7258_MB_UART_CHUNK_SIZE,
+    MPU_RBAR_XN | MPU_RBAR_AP_RORO | MPU_RBAR_SH_INNER,
+    MPU_RLAR_NONCACHEABLE
+  },
+  {
+    BK7258_MB_UART_TX_ADDRESS,
+    BK7258_MB_UART_CHUNK_SIZE,
+    MPU_RBAR_XN | MPU_RBAR_AP_RWRW | MPU_RBAR_SH_INNER,
+    MPU_RLAR_NONCACHEABLE
+  },
+#ifdef CONFIG_BK7258_PSRAM
+  {
+    BK7258_PSRAM_BASE,
+    BK7258_PSRAM_SIZE,
+    /* Match the BK7258 vendor AP mapping.  The PSRAM controller's normal,
+     * non-cacheable window is non-shareable on this interconnect.
+     */
+
+    MPU_RBAR_XN | MPU_RBAR_AP_RWRW | MPU_RBAR_SH_NO,
+    MPU_RLAR_NONCACHEABLE
+  },
+#endif
+  {
+    0x40000000u,
+    0x20000000u,
+    MPU_RBAR_XN | MPU_RBAR_AP_RWRW | MPU_RBAR_SH_INNER,
+    MPU_RLAR_DEVICE
+  },
+};
+
+void __attribute__((noinline, target("general-regs-only")))
+bk7258_cpu_private_initialize(bool primary)
+{
+  const size_t region_count = sizeof(g_bk7258_mpu_regions) /
+                              sizeof(g_bk7258_mpu_regions[0]);
+
+  modifyreg32(NVIC_CPACR, 0,
+              NVIC_CPACR_CP_FULL(10) | NVIC_CPACR_CP_FULL(11));
+  UP_DSB();
+  UP_ISB();
+
+  putreg32(0, BK7258_SAU_BASE + 0x08);
+  putreg32(0x00000000u, BK7258_SAU_BASE + 0x0c);
+  putreg32(0x0fffffe3u, BK7258_SAU_BASE + 0x10);
+  putreg32(1, BK7258_SAU_BASE + 0x08);
+  putreg32(0x10000000u, BK7258_SAU_BASE + 0x0c);
+  putreg32(0xefffffe1u, BK7258_SAU_BASE + 0x10);
+  putreg32(1, BK7258_SAU_BASE + 0x00);
+  UP_DSB();
+  UP_ISB();
+
+  putreg32((uintptr_t)__ram_vectors_start, NVIC_VECTAB);
+  UP_DSB();
+  UP_ISB();
+
+#ifdef CONFIG_ARM_MPU
+  {
+    const uint32_t hardware_regions =
+      (getreg32(MPU_TYPE) & MPU_TYPE_DREGION_MASK) >>
+      MPU_TYPE_DREGION_SHIFT;
+
+    if (hardware_regions < region_count)
+      {
+        for (; ; )
+          {
+            __asm__ volatile("wfi");
+          }
+      }
+
+    mpu_reset();
+    mpu_initialize(g_bk7258_mpu_regions, region_count, false, true);
+
+#ifdef CONFIG_ARMV8M_ICACHE
+    /* Turn the I-Cache on now that the MPU says the flash region is
+     * write-through cacheable.
+     *
+     * The AP executes in place from QSPI flash at 0x02150000, and nothing
+     * used to enable this: setting CONFIG_ARMV8M_ICACHE alone only compiles
+     * up_enable_icache() in, it does not call it, and every other ARMv8-M
+     * chip in the tree calls it from its own start code.  The cost of not
+     * doing so is one flash access per instruction fetch -- measured at
+     * roughly 1ms per drawn pixel in the expression renderer, about four
+     * orders of magnitude off the same code on a host, and unaffected by
+     * raising the core to 480MHz because the core was never the limit.
+     *
+     * CLIDR reads 0x09200003 on this part, so the cache is really there.
+     * Only the I-Cache is enabled: instruction fetch is read-only, so it
+     * needs no maintenance against the camera, panel and mailbox DMA that
+     * shares AP RAM (which the MPU keeps non-cacheable for that reason).
+     */
+
+    up_enable_icache();
+#endif
+
+  }
+#endif
+
+  (void)primary;
+}
+
+static void __attribute__((used, noinline, noreturn,
+                           target("general-regs-only")))
+bk7258_start(void)
+{
+  const uint8_t *src;
+  uint8_t *dest;
+
+  /* Configure the FPU before code compiled for the hard-float ABI can use
+   * it.  arm_fpuconfig() does not depend on BSS-backed synchronization.
    */
 
-  for (src = (const uint32_t *)_eronly,
-       dest = (uint32_t *)_sdata; dest < (uint32_t *)_edata;
-      )
+  arm_fpuconfig();
+  UP_DSB();
+  UP_ISB();
+  for (src = _eronly, dest = _sdata; dest < _edata; )
     {
       *dest++ = *src++;
     }
 
-  /* Perform early serial initialization */
+  for (dest = _sbss; dest < _ebss; )
+    {
+      *dest++ = 0;
+    }
 
-  /* Route and clock the debug UART before touching the console. */
+  for (src = __ram_vectors_load, dest = __ram_vectors_start;
+       dest < __ram_vectors_end; )
+    {
+      *dest++ = *src++;
+    }
 
-  bk7258_uart0_pinconfig();
+  bk7258_cpu_private_initialize(true);
+  arm_initialize_stack();
+
+  /* Install the buffered AP log channel before normal NuttX startup. */
+  (void)bk7258_syslog_initialize();
 
 #ifdef USE_EARLYSERIALINIT
   arm_earlyserialinit();
 #endif
 
-  /* Then start NuttX */
-
   nx_start();
+  for (; ; )
+    {
+    }
+}
 
-  /* Shouldn't get here */
-
-  for (; ; );
+void __attribute__((naked, noreturn, section(".start_text"))) __start(void)
+{
+  __asm__ volatile
+    (
+      "cpsid i\n"
+      "movs r0, #0\n"
+      "ldr r1, =0x20000000\n"
+      "str r0, [r1]\n"
+      "ldr r0, =__idle_stack_base\n"
+      "msr msplim, r0\n"
+      "b bk7258_start\n"
+    );
 }

@@ -24,6 +24,10 @@
 
 #include <nuttx/config.h>
 
+#if !defined(CONFIG_TIMER_ARCH) || !defined(CONFIG_ARM_SYSTICK)
+#  error "BK7258 system timer requires TIMER_ARCH and ARM_SYSTICK"
+#endif
+
 #include <time.h>
 
 #include <nuttx/timers/arch_timer.h>
